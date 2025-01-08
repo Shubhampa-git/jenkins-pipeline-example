@@ -1,0 +1,72 @@
+pipeline {
+    agent any
+
+    tools {
+        maven "Maven"
+        jdk "openjdk-11"
+    }
+
+    stages {
+        stage('Initialize') {
+            steps {
+                echo "Initializing Pipeline..."
+                echo "PATH = ${M2_HOME}/bin:${PATH}"
+                echo "M2_HOME = /opt/maven"
+            }
+        }
+
+        stage('Checkout Code') {
+            steps {
+                echo "Checking out code..."
+                git branch: 'master', url: 'https://github.com/atishayinfo/java-hello-world-webapp.git'
+            }
+        }
+
+        stage('Build') {
+            steps {
+                echo "Building the application..."
+                sh 'mvn -B -DskipTests clean package'
+            }
+        }
+
+        stage('Test') {
+            steps {
+                echo "Running tests..."
+                sh 'mvn test'
+            }
+        }
+
+        stage('Package') {
+            steps {
+                echo "Packaging the application..."
+                sh 'mvn clean package'
+            }
+        }
+    }
+
+    post {
+        always {
+            echo "Sending notifications for build ${env.BUILD_NUMBER}..."
+        }
+
+        success {
+            echo "Sending SUCCESS notifications..."
+            slackSend(channel: '#general', message: "SUCCESS: Build ${env.BUILD_NUMBER} completed successfully!")
+            emailext(
+                subject: "Jenkins Build SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: "Good news! The build ${env.BUILD_NUMBER} of job ${env.JOB_NAME} was successful.\nCheck details: ${env.BUILD_URL}",
+                recipientProviders: [[$class: 'DevelopersRecipientProvider']]
+            )
+        }
+
+        failure {
+            echo "Sending FAILURE notifications..."
+            slackSend(channel: '#general', message: "FAILURE: Build ${env.BUILD_NUMBER} failed. Please check the logs.")
+            emailext(
+                subject: "Jenkins Build FAILURE: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: "Oops! The build ${env.BUILD_NUMBER} of job ${env.JOB_NAME} has failed.\nCheck details: ${env.BUILD_URL}",
+                recipientProviders: [[$class: 'CulpritsRecipientProvider'], [$class: 'DevelopersRecipientProvider']]
+            )
+        }
+    }
+}
